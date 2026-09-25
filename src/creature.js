@@ -18,6 +18,8 @@ import { SharkTransit } from './shark-transit.js';
 import { MantaResponse } from './manta-response.js';
 import { CaptureQuality } from './capture-quality.js';
 import { homeFlybyCurve } from './home-flyby.js';
+import { lineBatch } from './line-batch.js';
+import { style } from './dom-cache.js';
 
 const clamp = THREE.MathUtils.clamp;
 const mix = THREE.MathUtils.lerp;
@@ -56,7 +58,8 @@ function animateMaterial(material) {
         .replace('material.thickness = thickness;','material.thickness=thickness*(1.+torso*1.8);'));
       shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
         float grain=sin(vMantaSurface.x*137.+sin(vMantaSurface.y*83.))*sin(vMantaSurface.y*119.);
-        roughnessFactor+=.009*grain*grain;`);
+        float detail=1.-smoothstep(.3,1.,max(fwidth(vMantaSurface.x)*137.,fwidth(vMantaSurface.y)*119.));
+        roughnessFactor+=.009*grain*grain*detail;`);
     }
   };
   material.customProgramCacheKey = () => 'okarar-manta-continuous-cephalic-v10';
@@ -71,7 +74,8 @@ export function createWorld(canvas, { mobile, onFallback, wordmarkArt }) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.08;
   renderer.localClippingEnabled=true;
-  renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1.25 : 1.65));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1.5 : 1.65));
+  renderer.transmissionResolutionScale=mobile?.85:1;
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(35, 1, .1, 100);
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -135,9 +139,9 @@ export function createWorld(canvas, { mobile, onFallback, wordmarkArt }) {
   }
 
   // Fine anatomical rays inside the membrane, plus a luminous outer edge.
-  const rayMat = new THREE.LineBasicMaterial({color:0x518d9d,transparent:true,opacity:.045,depthWrite:false});
-  const pearlMat = new THREE.LineBasicMaterial({color:0xf9f2d8,transparent:true,opacity:.20,depthWrite:false});
-  const lines=[];
+  const rayMat = animateMaterial(new THREE.LineBasicMaterial({color:0x518d9d,transparent:true,opacity:.045,depthWrite:false}));
+  const pearlMat = animateMaterial(new THREE.LineBasicMaterial({color:0xf9f2d8,transparent:true,opacity:.20,depthWrite:false}));
+  const rays=[],edges=[];
   for(let sign of [-1,1]) for(let k=1;k<=26;k++){
     const a=k/27, points=[];
     for(let j=0;j<=36;j++){
@@ -146,11 +150,16 @@ export function createWorld(canvas, { mobile, onFallback, wordmarkArt }) {
       const v=mix(.30, .20+a*.78, t);
       const p=point(u,v,1);p.z-=.014;points.push(p);
     }
-    const geo=new THREE.BufferGeometry().setFromPoints(points),line=new THREE.Line(geo,rayMat);creature.add(line);lines.push({line,base:geo.attributes.position.array.slice()});
+    rays.push(points);
   }
   for(let boundary of [0,1]){
     const points=[];for(let i=0;i<=180;i++)points.push(point(i/90-1,boundary,1));
-    const geo=new THREE.BufferGeometry().setFromPoints(points),line=new THREE.Line(geo,pearlMat);creature.add(line);lines.push({line,base:geo.attributes.position.array.slice()});
+    edges.push(points);
+  }
+  // Same wave/fold uniforms as the membrane: no CPU vertex uploads, 54 draws
+  // become two while preserving every ray and both outer contours.
+  for(const [points,material] of [[rays,rayMat],[edges,pearlMat]]){
+    const line=new THREE.LineSegments(lineBatch(points),material);line.frustumCulled=false;creature.add(line);
   }
   const tailRig=createMantaTail({mobile}),tailMaterial=shell.clone();
   // Already deformed once on the CPU: no second wing shader on the tail.
@@ -186,8 +195,14 @@ export function createWorld(canvas, { mobile, onFallback, wordmarkArt }) {
   const palettes={pearl:[0xe0f1ed,0x4e9298,0x8eb7b5,0x518d9d,'#d4e3e3'],iris:[0xeee0fb,0x9278bf,0xa298c5,0x8a659f,'#dfd4e7'],ember:[0xffe7d3,0xb57541,0xc19b7c,0xa97858,'#e7d7c9']};
   function setColor(name){color=name;const p=palettes[name];shell.color.setHex(p[0]);shell.attenuationColor.setHex(p[1]);dorsal.color.setHex(p[0]);ventral.color.setHex(p[0]);rayMat.color.setHex(p[3]);backdropMaterial.uniforms.uTint.value.set(p[4]);shark.setColor(name);}
   function applyQualityAppearance(value){if(value===null)return;shell.transmission=value?.78:mix(.75,.99,transparency);dorsal.transmission=value?.81:.91;ventral.transmission=value?.60:.64;shardMat.transmission=value?0:.88;shards.forEach((s,i)=>s.visible=!value||i<7);shark.setLight(value);}
-  function setLight(value){isLight=value;renderer.setPixelRatio(Math.min(devicePixelRatio,value?1:1.65));applyQualityAppearance(captureQuality.request(value));}
-  function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();backdropMaterial.uniforms.uAspect.value=w/h;}
+  function setLight(value){isLight=value;renderer.setPixelRatio(Math.min(devicePixelRatio,value?1.5:1.65));applyQualityAppearance(captureQuality.request(value));}
+  function setResolution(ratio){if(Math.abs(renderer.getPixelRatio()-ratio)>.01)renderer.setPixelRatio(ratio);}
+  let renderWidth=0,renderHeight=0;
+  function resize(){
+    const w=canvas.clientWidth||innerWidth,h=canvas.clientHeight||innerHeight;
+    if(w===renderWidth&&h===renderHeight)return false;
+    renderWidth=w;renderHeight=h;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();backdropMaterial.uniforms.uAspect.value=w/h;return true;
+  }
   resize();
   canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();onFallback();});
   canvas.addEventListener('webglcontextrestored',()=>location.reload());
@@ -237,7 +252,7 @@ export function createWorld(canvas, { mobile, onFallback, wordmarkArt }) {
     camera.position.set(pointer.x*(reduced?0:.22),pointer.y*(reduced?0:.14),p.z);camera.lookAt(0,0,0);
     camera.updateMatrixWorld();
     foregroundScene=active?backgroundHandoff(progress):0;
-    const wordmark=document.querySelector('.wordmark');wordmark.style.display=foregroundScene>0?'':'none';
+    const wordmark=document.querySelector('.wordmark');style(wordmark,'display',foregroundScene>0?'':'none');
     const bgHeight=2*Math.tan(THREE.MathUtils.degToRad(17.5))*(p.z+12)*1.12;backdrop.scale.set(bgHeight*camera.aspect,bgHeight,1);
     root.position.set(swimPose.x,swimPose.y+(reduced?0:-Math.cos(phase)*.08),0);
     creature.quaternion.copy(swimPose.q).multiply(flourishRotation.setFromEuler(flourishEuler.set(pointer.y*.1,pointer.x*.14,0)));
@@ -346,6 +361,9 @@ export function createWorld(canvas, { mobile, onFallback, wordmarkArt }) {
         }
       }
       transit.observe(shark.group,dt);
+      // The padded animated envelope protects fins/tail. Do not submit the
+      // skinned glass at all while it is wholly outside the viewing frustum.
+      if(progress>=1)shark.group.visible=!outsideCamera(camera,shark.entryBounds,shark.group.position,shark.group.quaternion,shark.group.scale.x);
       if(debug){
         if(transit.active&&!navigationTrace)navigationTrace={rows:[]};
         if(navigationTrace){
@@ -361,7 +379,6 @@ export function createWorld(canvas, { mobile, onFallback, wordmarkArt }) {
     }
     if(root.visible){
       uniforms.uPhase.value=phase;uniforms.uFlow.value=amplitude;uniforms.uPulse.value=pulse+energy*.3;
-      for(const {line,base} of lines){const arr=line.geometry.attributes.position.array;for(let n=0;n<arr.length;n+=3){arr[n]=base[n]*(1-uniforms.uCapture.value*.52);arr[n+2]=base[n+2]+wingDisplacement(base[n],base[n+1],phase,amplitude,pulse+energy*.3,uniforms.uCapture.value);}line.geometry.attributes.position.needsUpdate=true;}
       tailRig.update({phase,flow:amplitude,capture:uniforms.uCapture.value});
       tailMaterial.color.copy(shell.color);tailMaterial.attenuationColor.copy(shell.attenuationColor);
       tailMaterial.transmission=shell.transmission;tailMaterial.roughness=shell.roughness;
@@ -373,7 +390,7 @@ export function createWorld(canvas, { mobile, onFallback, wordmarkArt }) {
     shards.forEach((shard,n)=>{const d=shard.userData;const theta=d.a+time*d.speed;shard.position.set(Math.cos(theta)*d.r,Math.sin(theta)*d.r*.7,d.z+Math.sin(position*.8+n)*.7);shard.rotation.x=time*d.speed+n;shard.rotation.y=time*d.speed*.6;const suck=active&&progress<.75?smooth(.30,.70,progress):0;if(suck){shard.position.x=mix(shard.position.x,attackAnchor.x,suck);shard.position.y=mix(shard.position.y,attackAnchor.y,suck);shard.position.z*=1-suck;}shard.scale.copy(d.scale).multiplyScalar(mix(1,.42,dark)*(1-suck*.96));});
     if(active&&progress>=1&&impactTime===null)impactTime=time;
     const impact=impactTime===null?0:smoother(0,.28,returning)*Math.exp(-Math.max(0,time-impactTime)*2.3);
-    const title=1-clamp(position*1.8,0,1);backdropMaterial.uniforms.uWord.value=title*entered;wordmark.style.opacity=String(foregroundScene*title*entered*(.26+impact*.18));
+    const title=1-clamp(position*1.8,0,1);backdropMaterial.uniforms.uWord.value=title*entered;style(wordmark,'opacity',String(foregroundScene*title*entered*(.26+impact*.18)));
     if(sharkWarmupPending&&!active){
       renderWithHiddenActor(renderer,scene,camera,shark.group);
       sharkWarmupPending=false;canvas.dataset.sharkPrepared='true';
@@ -393,7 +410,7 @@ export function createWorld(canvas, { mobile, onFallback, wordmarkArt }) {
       canvas.dataset.musicGlideProgress=String(passTrack?.musicGlide?passTrack.musicGlide.elapsed/passTrack.musicGlide.duration:0);
     }
     if(canvas.hasAttribute('data-rhythm-debug')){canvas.dataset.flapBpm=String(FLAP_BPM);canvas.dataset.flapPhase=String(phase);canvas.dataset.sharkPhase=String(sharkPhase);canvas.dataset.jaw=String(shark.jawOpen);canvas.dataset.dark=String(dark);canvas.dataset.sharkX=String(shark.group.position.x);canvas.dataset.sharkEntryWeight=String(firstAttack?entryWeight(progress):0);}
-    const mouth=shark.mouth(camera,innerWidth,innerHeight);
+    const mouth=shark.mouth(camera,renderWidth,renderHeight);
     // When an animal swims behind the camera, projection flips. Keep the
     // original aspiration aimed at the last visible edge, never at infinity.
     mouth.x=clamp(mouth.x,-innerWidth*.5,innerWidth*1.5);mouth.y=clamp(mouth.y,-innerHeight*.5,innerHeight*1.5);
@@ -401,5 +418,5 @@ export function createWorld(canvas, { mobile, onFallback, wordmarkArt }) {
   }
   // Prepare the hidden shark during the intro, not on its first attack frame.
   const ready=shark.ready.then(()=>renderer.compileAsync(shark.group,camera,scene)).then(()=>{sharkWarmupPending=true;});
-  return {render,resize,setColor,setLight,ready,get arrivalReady(){return arrival.complete;},get navigationBusy(){return transit.active;},setAmplitude:v=>{amplitude=v;},setTransparency:v=>{transparency=v;shell.transmission=isLight?mix(.3,.75,v):mix(.5,.99,v);shell.roughness=mix(.2,.045,v);dorsal.transmission=mix(.45,.92,v);ventral.transmission=mix(.38,.84,v);shark.setFinish(v);},get light(){return isLight;},renderer};
+  return {render,resize,setColor,setLight,setResolution,ready,metrics:()=>({calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,ratio:renderer.getPixelRatio(),width:canvas.width,height:canvas.height}),get arrivalReady(){return arrival.complete;},get navigationBusy(){return transit.active;},setAmplitude:v=>{amplitude=v;},setTransparency:v=>{transparency=v;shell.transmission=isLight?mix(.3,.75,v):mix(.5,.99,v);shell.roughness=mix(.2,.045,v);dorsal.transmission=mix(.45,.92,v);ventral.transmission=mix(.38,.84,v);shark.setFinish(v);},get light(){return isLight;},renderer};
 }

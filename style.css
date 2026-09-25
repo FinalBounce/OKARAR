@@ -96,3 +96,12 @@ body.is-abyss:after{opacity:var(--abyss-progress,1)}
 .is-abyss .fallback-creature{filter:none!important}
 .reduced-motion,.reduced-motion:after{transition:none}
 @media(max-width:800px){.hud-left{gap:11px}.hud{gap:12px}#text-toggle{font-size:7px}.is-abyss .specimen-note{opacity:.65}}
+
+/* Keep the 3D framebuffer stable while mobile browser chrome opens/closes.
+   Navigation and consent controls remain tied to the visible viewport. */
+@media(max-width:800px),(pointer:coarse){
+  #world{height:100lvh}
+  .wordmark{top:50lvh}
+  .grain{opacity:.016}
+  .is-abyss .grain{opacity:.028}
+}
