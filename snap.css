@@ -1,0 +1,11 @@
+/* Native settling keeps wheel/touch inertia and every intermediate animation
+   frame. Only enable it after consent; the no-script document stays free. */
+html.journey-snap{scroll-snap-type:y mandatory;scroll-padding-block:0}
+
+/* Chapters are intentionally taller than a viewport to give the choreography
+   room. Snapping their full boxes would allow stops inside that oversized
+   area. A tiny marker pins each resting pose to the existing chapter offset. */
+.journey-snap #journey>.chapter::before{
+  content:"";position:absolute;top:0;left:0;width:1px;height:1px;
+  scroll-snap-align:start;scroll-snap-stop:normal;pointer-events:none;
+}

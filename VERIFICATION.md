@@ -1,5 +1,14 @@
 # Vérification — Portfolio OKARAR / 25 septembre 2026
 
+## Sections aimantées — parcours clair et sombre
+
+- Ajout du calage natif du navigateur après consentement, commun aux six sections et aux deux ambiances. Le geste, son inertie, les positions intermédiaires, l’aspiration des mots et les trajectoires restent inchangés. Aucun intercepteur de molette/toucher, minuteur ou second moteur de défilement.
+- Points d’arrêt de 1 px au début des chapitres : les distances de 135svh / 125svh nécessaires à la chorégraphie sont conservées sans autoriser un arrêt à l’intérieur d’une zone de snap plus haute que l’écran. Les grands gestes peuvent traverser plusieurs sections (`scroll-snap-stop:normal`). Le document sans JavaScript ne reçoit pas l’aimantation.
+- Navigateur intégré 1280 × 720 : arrêt mesuré aux ancres 0, 972 et 3888 px, petite tentative ramenée à la section courante, saut de plusieurs sections et remontée. Aperçu sombre silencieux : aspiration intermédiaire des mots confirmée (translations, réduction et opacité partielle avant arrivée).
+- Format mobile simulé 390 × 844 : arrêts exacts à 2110 et 5275 px, grande remontée à 0, lien du menu Instagram à 4220 px, aucune largeur débordante. Entrée directe sur Musique et remontée Artiste avec mouvements réduits : alignement exact, comportement `auto` conservé. Pas de test sur un téléphone physique.
+- Safari macOS : parcours silencieux en mouvements réduits, geste descendant vers Artiste puis remontée vers Home ; retour de la barre de défilement à 0 confirmé après la décélération native. Onglet de contrôle fermé et largeur du navigateur intégré rétablie après les essais.
+- 167 tests réussis, syntaxe et compilation validées. Aucun avertissement ou erreur navigateur relevé pendant ce contrôle.
+
 ## Capture — pas de blanchiment lors d’un changement de qualité
 
 - Cause isolée par comparaison au même instant (52 % de l’attaque) : le mode léger réduisait immédiatement la transmission du dos de .91 à .81, du ventre de .64 à .60 et celle de la queue. Le verre devenait plus opaque et plus clair. L’adaptation automatique pouvait déclencher ce changement pendant le gros plan.

@@ -64,6 +64,7 @@ function enter(withSound){
   entered=true;if(withSound)sound.enable();entry.classList.add('is-closed');entry.inert=true;
   entry.setAttribute('aria-hidden','true');document.body.classList.remove('awaiting-entry');$('.nav').inert=false;$('#journey').inert=false;$('.hud').inert=false;
   geometry();const legacy={'#production':'#label','#projets':'#instagram'};const hash=legacy[location.hash]||location.hash;const destination=chapters.find(ch=>'#'+ch.id===hash)||chapters[0];scrollTo({top:destination.offsetTop,behavior:'instant'});updateScroll();currentPosition=targetPosition;if(reduced)entryBlend=1;
+  document.documentElement.classList.add('journey-snap');
   // Both consent choices share the same greeting, independently of audio load.
   flourish.start(!!world&&!document.body.classList.contains('no-webgl')&&!paused&&!reduced);
   $('#sound-toggle').focus({preventScroll:true});dirty=true;
