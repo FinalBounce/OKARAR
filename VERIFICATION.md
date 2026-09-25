@@ -1,5 +1,12 @@
 # Vérification — Portfolio OKARAR / 25 septembre 2026
 
+## Flèches Safari / iPhone — icônes vectorielles
+
+- Remplacement de toutes les flèches typographiques des pages par des SVG décoratifs : entrée, navigation, liens musicaux, label, Instagram, contact, défilement, vrille et crédits. Tracé fin utilisant la couleur du texte, dimensions héritées des boutons et survols conservés. Aucun recours à une police emoji.
+- Les états « READY TO EXPLORE », « SCROLL » et « BACK UP » ne réintroduisent plus de caractères-flèches. SVG exclus de la lecture vocale et du parcours clavier. Version du script dans son URL actualisée pour éviter de réutiliser l’ancien script avec le nouveau balisage.
+- 159 tests réussis, syntaxe et compilation validées. Nouveaux contrôles : absence de flèches Unicode, attributs accessibles, couleur héritée et conservation des SVG lors des mises à jour dynamiques.
+- Rendu inspecté dans Safari sur macOS : accueil clair, entrée silencieuse, contact sombre et flèches ascendantes du retour en haut. Pas de test sur iPhone physique. Musique, modèles et animations inchangés.
+
 ## Premier scroll légèrement dépassé — conserver le survol
 
 - Défaut reproduit dans le navigateur à une destination 1,2001 : le directeur classait un dépassement de 10 % comme un saut de section et remplaçait le premier passage par un raccord frontal (`pass: idle`, transit en sortie). Le requin continuait alors dans la direction de la caméra au lieu de suivre sa courbe ascendante.
