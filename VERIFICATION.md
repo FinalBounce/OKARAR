@@ -1,5 +1,12 @@
 # Vérification — Portfolio OKARAR / 25 septembre 2026
 
+## Capture — pas de blanchiment lors d’un changement de qualité
+
+- Cause isolée par comparaison au même instant (52 % de l’attaque) : le mode léger réduisait immédiatement la transmission du dos de .91 à .81, du ventre de .64 à .60 et celle de la queue. Le verre devenait plus opaque et plus clair. L’adaptation automatique pouvait déclencher ce changement pendant le gros plan.
+- Pendant toute la partie visible de la première attaque, les modifications d’aspect liées à la qualité sont mises en attente. La baisse de résolution reste immédiate pour préserver les performances. La matière est actualisée seulement à l’occultation complète (progression .69), quand la raie n’est plus visible. Nage, repli, profondeur, vitesse, éclairage artistique, fondu et audio inchangés.
+- Vérification dans le navigateur avec un aperçu local déterministe, non publié : mode léger demandé à .52, transmissions inchangées à .52 et .68 ; application unique à .69, voile égal à 1 et raie masquée. Contrôle visuel de la même pose avant/après et du rendu corrigé. Ce test reproduit le changement de qualité, sans prouver à distance le moment exact où il s’est déclenché sur l’appareil de l’utilisateur.
+- 164 tests réussis, syntaxe et compilation validées. Couverture des deux sens de changement de qualité, annulation, pause prolongée, toutes les phases visibles, application sous le noir, parcours normal et mouvements réduits.
+
 ## Flèches Safari / iPhone — icônes vectorielles
 
 - Remplacement de toutes les flèches typographiques des pages par des SVG décoratifs : entrée, navigation, liens musicaux, label, Instagram, contact, défilement, vrille et crédits. Tracé fin utilisant la couleur du texte, dimensions héritées des boutons et survols conservés. Aucun recours à une police emoji.

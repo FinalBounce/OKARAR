@@ -16,6 +16,7 @@ import { mantaJourneyPose } from './manta-journey.js';
 import { createMantaTail } from './manta-tail.js';
 import { SharkTransit } from './shark-transit.js';
 import { MantaResponse } from './manta-response.js';
+import { CaptureQuality } from './capture-quality.js';
 
 const clamp = THREE.MathUtils.clamp;
 const mix = THREE.MathUtils.lerp;
@@ -180,9 +181,11 @@ export function createWorld(canvas, { mobile, onFallback, wordmarkArt }) {
     shard.userData={a,r,z:(rand()-.5)*4,speed:.025+rand()*.04,scale:shard.scale.clone()};shard.rotation.set(rand()*3,rand()*3,rand()*3);scene.add(shard);shards.push(shard);
   }
   let isLight=mobile, amplitude=.6, transparency=.75, color='pearl';
+  const captureQuality=new CaptureQuality(mobile);
   const palettes={pearl:[0xe0f1ed,0x4e9298,0x8eb7b5,0x518d9d,'#d4e3e3'],iris:[0xeee0fb,0x9278bf,0xa298c5,0x8a659f,'#dfd4e7'],ember:[0xffe7d3,0xb57541,0xc19b7c,0xa97858,'#e7d7c9']};
   function setColor(name){color=name;const p=palettes[name];shell.color.setHex(p[0]);shell.attenuationColor.setHex(p[1]);dorsal.color.setHex(p[0]);ventral.color.setHex(p[0]);rayMat.color.setHex(p[3]);backdropMaterial.uniforms.uTint.value.set(p[4]);shark.setColor(name);}
-  function setLight(value){isLight=value;renderer.setPixelRatio(Math.min(devicePixelRatio,value?1:1.65));shell.transmission=value?.78:mix(.75,.99,transparency);dorsal.transmission=value?.81:.91;ventral.transmission=value?.60:.64;shardMat.transmission=value?0:.88;shards.forEach((s,i)=>s.visible=!value||i<7);shark.setLight(value);}
+  function applyQualityAppearance(value){if(value===null)return;shell.transmission=value?.78:mix(.75,.99,transparency);dorsal.transmission=value?.81:.91;ventral.transmission=value?.60:.64;shardMat.transmission=value?0:.88;shards.forEach((s,i)=>s.visible=!value||i<7);shark.setLight(value);}
+  function setLight(value){isLight=value;renderer.setPixelRatio(Math.min(devicePixelRatio,value?1:1.65));applyQualityAppearance(captureQuality.request(value));}
   function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();backdropMaterial.uniforms.uAspect.value=w/h;}
   resize();
   canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();onFallback();});
@@ -215,6 +218,9 @@ export function createWorld(canvas, { mobile, onFallback, wordmarkArt }) {
     const {active,progress,dark,returning=0}=takeover;
     const firstAttack=active&&progress<1;
     const engulf=engulfPose(progress,returning);
+    // Match the actual blackout, not a guessed depth or a timer. A quality
+    // switch cannot whiten the disc, tail or details while they are visible.
+    applyQualityAppearance(captureQuality.update({active,progress,veil:engulf.veil}));
     uniforms.uCapture.value=firstAttack?smoother(.15,.32,progress):0;
     swallowPlane.constant=10000;
     if(active&&!attackAnchor)attackAnchor={...p};
@@ -378,6 +384,7 @@ export function createWorld(canvas, { mobile, onFallback, wordmarkArt }) {
     canvas.dataset.creature=active&&progress>=.63?'shark':active?'attack':'manta';
     if(debug){
       canvas.dataset.mantaRetained=String(root.visible);
+      canvas.dataset.captureQuality=JSON.stringify({requested:captureQuality.requested,applied:captureQuality.applied,locked:captureQuality.locked,disc:dorsal.transmission,belly:ventral.transmission,tail:tailMaterial.transmission});
       canvas.dataset.mantaPose=JSON.stringify({v:root.position.toArray(),q:creature.quaternion.toArray(),s:creature.scale.x});
       canvas.dataset.arrival=JSON.stringify({complete:arrival.complete,chapter:arrival.route?.chapter??null,u:arrival.route?Math.min(1,arrival.route.elapsed/arrival.route.duration):null,v:shark.group.position.toArray(),q:shark.group.quaternion.toArray(),s:shark.group.scale.x});
       canvas.dataset.transit=JSON.stringify({active:transit.active,stage:transit.stage,chapter:transit.chapter,relocations:transit.relocations});
