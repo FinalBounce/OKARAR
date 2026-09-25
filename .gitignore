@@ -1,0 +1,5 @@
+node_modules/
+.DS_Store
+work/
+# Superseded audio draft, retained locally but not used by the published site.
+assets/okarar-loop.wav

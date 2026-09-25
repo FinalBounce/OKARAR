@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>OKARAR — Intro and loop verification</title>
+<style>body{max-width:800px;margin:60px auto;padding:24px;font:16px system-ui;background:#edece7;color:#203d40}button{padding:16px;font:inherit}pre{white-space:pre-wrap;line-height:1.6}</style>
+<h1>OKARAR — Intro once, loop forever</h1>
+<p>Silent test of the actual playback engine: the full intro followed by three loop cycles, at both common audio sample rates.</p>
+<button id="run">Verify intro and loop</button><pre id="result" role="status">Ready.</pre>
+<script type="module">
+import { Sound, AUDIO_URL, INTRO_SECONDS, LOOP_SECONDS } from '../src/sound.js';
+const button=document.querySelector('#run'),out=document.querySelector('#result');
+button.addEventListener('click',async()=>{
+  button.disabled=true;out.textContent='Decoding and rendering the full sequence…';
+  try{
+    const response=await fetch(new URL(AUDIO_URL,new URL('../',location.href)));if(!response.ok)throw Error('WAV missing');
+    const bytes=await response.arrayBuffer(),results=[];
+    for(const rate of [48000,44100]){
+      const introFrames=Math.round(INTRO_SECONDS*rate),frames=Math.round(LOOP_SECONDS*rate);
+      const context=new OfflineAudioContext(2,introFrames+frames*3,rate);
+      const buffer=await context.decodeAudioData(bytes.slice(0));
+      if(buffer.length!==introFrames+frames)throw Error(`Unexpected duration at ${rate} Hz`);
+      const sound=new Sound(()=>{},()=>{});
+      sound.context=context;sound.buffer=buffer;sound.analyser=context.createAnalyser();sound.analyser.connect(context.destination);
+      sound.startPlayback();
+      const rendered=await context.startRendering();
+      let error=0,repeatError=0,introError=0,peak=0;
+      for(let c=0;c<2;c++){
+        const src=buffer.getChannelData(c),dst=rendered.getChannelData(c);
+        // The only fade is the explicit start/stop control, not a transition.
+        for(let i=Math.ceil(.15*rate)+1;i<introFrames;i++)introError=Math.max(introError,Math.abs(dst[i]-.5*src[i]));
+        for(let i=0;i<frames;i++){
+          for(let cycle=0;cycle<3;cycle++)error=Math.max(error,Math.abs(dst[introFrames+cycle*frames+i]-.5*src[introFrames+i]));
+          repeatError=Math.max(repeatError,Math.abs(dst[introFrames+frames+i]-dst[introFrames+2*frames+i]));
+          peak=Math.max(peak,Math.abs(dst[introFrames+i]));
+        }
+      }
+      if(error>1e-6||repeatError>1e-6||introError>1e-6||peak===0)throw Error(`PCM mismatch: ${introError}, ${error}, ${repeatError}`);
+      let weakestBoundaryDb=0;
+      for(let cycle=0;cycle<3;cycle++)for(let block=0;block<10;block++){
+        const start=introFrames+cycle*frames+Math.round(block*.01*rate),end=introFrames+cycle*frames+Math.round((block+1)*.01*rate);
+        let sum=0;
+        for(let c=0;c<2;c++){const data=rendered.getChannelData(c);for(let i=start;i<end;i++)sum+=data[i]*data[i];}
+        const db=10*Math.log10(Math.max(1e-24,sum/(2*(end-start))));weakestBoundaryDb=Math.min(weakestBoundaryDb,db);
+        if(db< -46)throw Error(`Silent startup at boundary ${cycle+1}, block ${block}: ${db.toFixed(2)} dBFS`);
+      }
+      results.push({sampleRate:rate,introSeconds:INTRO_SECONDS,loopSeconds:LOOP_SECONDS,introPlays:1,loopCycles:3,introFrames,framesPerCycle:frames,maxIntroError:introError,maxLoopError:error,maxRepeatError:repeatError,weakestBoundaryDb,peak,status:'PASS'});
+    }
+    out.textContent='PASS — intro played once; only the second audio repeated. No frames lost or added; no silent startup at the intro transition or loop repeats.\n'+JSON.stringify(results,null,2);
+  }catch(error){out.textContent='FAIL — '+error.message;}
+  finally{button.disabled=false;}
+});
+</script></html>
