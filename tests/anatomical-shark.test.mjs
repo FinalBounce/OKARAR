@@ -203,11 +203,12 @@ test('reverse-scroll relocation waits for the real animated tail and fins to lea
 });
 test('the preserved first fly-by carries the real skin above the lens, never through it',async()=>{
   const {smoother}=await source('motion.js'),{sharkIdlePose}=await source('shark-arrival.js');
+  const {homeFlybyCurve}=await source('home-flyby.js');
   const point=new THREE.Vector3(),up=new THREE.Vector3(0,1,0),axis=new THREE.Quaternion().setFromAxisAngle(up,-Math.PI/2);
   for(const small of [false,true]){
     const z=small?16:11.8,scale=small?.78:1.28;
     const idle=sharkIdlePose({small,chapter:0,halfWidth:4,time:0,reduced:true});
-    const curve=new THREE.CatmullRomCurve3([idle.v,new THREE.Vector3(.1,.2,2),new THREE.Vector3(.15,1.5,z-3),new THREE.Vector3(1,7,z+12)]);
+    const curve=homeFlybyCurve(idle.v,z);
     let crossed=0;
     for(let frame=0;frame<=180;frame++){
       const t=frame/180,u=smoother(0,1,t),direction=curve.getTangent(u);
@@ -225,4 +226,40 @@ test('the preserved first fly-by carries the real skin above the lens, never thr
     }
     assert.ok(crossed>100,'the complete shark really crosses the lens plane');
   }
+});
+test('home overflight triangles clear the near plane with live idle drift and camera parallax',async()=>{
+  const {homeFlybyCurve}=await source('home-flyby.js'),{smoother}=await source('motion.js');
+  const {sharkIdlePose}=await source('shark-arrival.js');
+  const up=new THREE.Vector3(0,1,0),axis=new THREE.Quaternion().setFromAxisAngle(up,-Math.PI/2);
+  const meshes=[];rig.group.traverse(mesh=>{if(mesh.isMesh)meshes.push(mesh);});
+  let intersections=0;
+  for(const small of [false,true])for(const idleTime of [0,5,13]){
+    const z=small?16:11.8,view=new THREE.PerspectiveCamera(35,small?390/844:1280/720,.1,100);
+    // Highest viewer position, with lateral parallax and its corresponding tilt.
+    view.position.set(.22,.14,z);view.lookAt(0,0,0);view.updateMatrixWorld();
+    const idle=sharkIdlePose({small,chapter:0,halfWidth:4,time:idleTime}),curve=homeFlybyCurve(idle.v,z);
+    for(let frame=50;frame<=130;frame++){
+      const t=frame/180,u=smoother(0,1,t),direction=curve.getTangent(u);
+      const q=new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(direction,new THREE.Vector3(),up)).multiply(axis)
+        .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),Math.sin(t*Math.PI*2)*.17));
+      rig.group.position.copy(curve.getPoint(u));rig.group.quaternion.copy(idle.q).slerp(q,smoother(0,.20,t));rig.group.scale.setScalar(idle.s);
+      rig.animate({phase:(idleTime+t*3.6)/1.2*Math.PI*2,amplitude:1,jawOpen:.13,instant:true});rig.group.updateMatrixWorld(true);
+      for(const mesh of meshes){
+        const points=[];
+        for(let i=0;i<mesh.geometry.attributes.position.count;i++)points.push(mesh.getVertexPosition(i,new THREE.Vector3()).applyMatrix4(mesh.matrixWorld).applyMatrix4(view.matrixWorldInverse));
+        const index=mesh.geometry.index;
+        for(let i=0;i<(index?.count??points.length);i+=3){
+          const tri=[0,1,2].map(j=>points[index?index.getX(i+j):i+j]);
+          for(let j=0;j<3;j++){
+            const a=tri[j],b=tri[(j+1)%3],plane=-view.near;
+            if((a.z-plane)*(b.z-plane)>0||Math.abs(a.z-b.z)<1e-9)continue;
+            const f=(plane-a.z)/(b.z-a.z),y=a.y+(b.y-a.y)*f;
+            assert.ok(y>Math.tan(view.fov*Math.PI/360)*view.near+.10,'the clipped skin stays above the entire viewport, not around or inside the lens');
+            intersections++;
+          }
+        }
+      }
+    }
+  }
+  assert.ok(intersections>1000,'tested real triangle/near-plane intersections through the close-up');
 });

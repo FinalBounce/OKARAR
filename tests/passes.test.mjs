@@ -18,11 +18,14 @@ test('no pass during the intro or in reduced motion; pause freezes a pass',()=>{
   assert.deepEqual(d.update(.4,.5,{paused:true}),p);
   assert.ok(d.update(.4,.05).t>p.t);
 });
-test('scrolling back allows another pass; large jump cancels the old one',()=>{
+test('scrolling back allows another pass; large jumps still cancel non-home passes',()=>{
   const d=new PassDirector();const first=d.update(.2,.01);
   for(let i=0;i<40;i++)d.update(.2,.1);
   d.update(0,.1);for(let i=0;i<4;i++)d.update(0,.1);
   const next=d.update(.2,.1);assert.ok(next.id>first.id);
+  for(let i=0;i<40;i++)d.update(.2,.1);
+  d.update(1,.1);for(let i=0;i<4;i++)d.update(1,.1);
+  assert.equal(d.update(1.3,.1).chapter,1);
   assert.equal(d.update(3,.1),null);
 });
 test('one-section forward scroll retains the authored pass and delivers its exact endpoint',()=>{
@@ -54,16 +57,48 @@ test('a little forward overscroll keeps the first overhead fly-by instead of a f
     assert.equal(next?.chapter,1);
   }
 });
-test('leaving the first destination or reversing still cancels the overhead pass',()=>{
-  for(const target of [0,1.8,2,3,5]){
-    const d=new PassDirector();d.update(.3,1/60,{target:.9});
-    assert.equal(d.update(.4,1/60,{target}),null);
-    assert.equal(d.redirecting,true);
+test('snap-back, reversal and skipped chapters cannot interrupt the safe home overflight',()=>{
+  for(const fps of [30,60,120])for(const at of [.05,.2,.45,.65,.9])for(const target of [0,.08,.5,1,1.8,2,3,5]){
+    const d=new PassDirector();let position=0,first=null,last=0,completed=false;
+    for(let frame=0;frame<fps*5;frame++){
+      const end=frame/fps<PASS_SECONDS*at?1:target;
+      position+=(end-position)*(1-Math.exp(-8/fps));
+      const pass=d.update(position,1/fps,{target:end});
+      if(pass){
+        first??=pass.id;assert.equal(pass.id,first);assert.equal(pass.chapter,0);
+        assert.equal(d.redirecting,false);assert.ok(pass.t>=last);last=pass.t;
+      }else if(first){assert.equal(last,1,'deliver the safe endpoint before handing off');completed=true;break;}
+    }
+    assert.ok(completed);
   }
+});
+test('a fast departure cannot skip the safe fly-by even if easing jumps past chapter zero',()=>{
+  for(const target of [1.8,2,3,5])for(const position of [.2,.9,1.4,3,5]){
+    const d=new PassDirector(),pass=d.update(position,1/30,{target});
+    assert.equal(pass?.chapter,0);assert.equal(pass.t,0);assert.equal(d.redirecting,false);
+  }
+});
+test('tiny gestures below the original departure threshold do not start a fly-by',()=>{
+  const d=new PassDirector();
+  assert.equal(d.update(.06,1/60,{target:1}),null);
+  assert.equal(d.update(.13,1/60,{target:1}),null);
+  assert.equal(d.update(.05,1/60,{target:0}),null);
+  assert.equal(d.update(0,1/60,{target:0}),null);
+});
+test('an interrupted home fly-by finishes once and can play again after returning home',()=>{
+  const d=new PassDirector(),first=d.update(.2,1/60,{target:1});
+  let last=0;
+  for(let frame=0;frame<300;frame++){
+    const pass=d.update(0,1/60,{target:0});
+    if(pass){assert.equal(pass.id,first.id);last=pass.t;}
+  }
+  assert.equal(last,1);assert.equal(d.pass,null);
+  const next=d.update(.2,1/60,{target:1});
+  assert.equal(next.chapter,0);assert.ok(next.id>first.id);
 });
 test('smoothed multi-section jumps do not queue passes for intermediate chapters',()=>{
   for(const end of [3,5]){
-    const d=new PassDirector();d.update(.2,1/60);let position=.2;
+    const d=new PassDirector();d.update(1,1/60,{active:false});d.update(1.2,1/60);let position=1.2;
     for(let frame=0;frame<360;frame++){
       position+=(end-position)*(1-Math.exp(-8/60));
       assert.equal(d.update(position,1/60,{target:end,busy:frame<240}),null);
@@ -71,8 +106,8 @@ test('smoothed multi-section jumps do not queue passes for intermediate chapters
   }
 });
 test('slow reverse scrolling cancels an obsolete pass too, not only a large one-frame delta',()=>{
-  const d=new PassDirector();d.update(.4,1/60);
-  for(let i=1;i<=12;i++)d.update(.4-i*.01,1/60);
+  const d=new PassDirector();d.update(1,1/60,{active:false});d.update(1.4,1/60);
+  for(let i=1;i<=12;i++)d.update(1.4-i*.01,1/60);
   assert.equal(d.pass,null);assert.equal(d.redirecting,true);
 });
 test('original aspiration moves consecutive words between .12 and .70 of a section',()=>{

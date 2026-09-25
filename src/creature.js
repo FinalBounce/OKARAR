@@ -17,6 +17,7 @@ import { createMantaTail } from './manta-tail.js';
 import { SharkTransit } from './shark-transit.js';
 import { MantaResponse } from './manta-response.js';
 import { CaptureQuality } from './capture-quality.js';
+import { homeFlybyCurve } from './home-flyby.js';
 
 const clamp = THREE.MathUtils.clamp;
 const mix = THREE.MathUtils.lerp;
@@ -310,14 +311,14 @@ export function createWorld(canvas, { mobile, onFallback, wordmarkArt }) {
         if(passTrack?.id!==pass.id){
           const start=shark.group.position.clone(),startQ=shark.group.quaternion.clone();
           let points;
-          if(pass.chapter===0)points=[start,new THREE.Vector3(.1,.2,2),new THREE.Vector3(.15,1.5,p.z-3),new THREE.Vector3(1,7,p.z+12)];
+          if(pass.chapter===0)points=null; // Shared, geometry-tested overhead arc.
           else if(pass.chapter===1)points=[start,new THREE.Vector3(-halfWidth*.6,-.5,1),new THREE.Vector3(.1,.7,2.2),new THREE.Vector3(side,-.1,-1.8)];
           else if(pass.chapter===2)points=[start,new THREE.Vector3(0,1.1,2.2),new THREE.Vector3(-halfWidth*.7,2.5,4),new THREE.Vector3(-halfWidth-10,5,0)];
           else if(pass.chapter===3)points=[start,new THREE.Vector3(halfWidth*.5,-.6,1.5),instagramApproach({small,halfWidth}),instagramPose({small,halfWidth}).v];
           else points=[start,new THREE.Vector3(-.5,.8,1),new THREE.Vector3(.4,2,p.z-2),new THREE.Vector3(halfWidth+9,5,p.z+8)];
-          passTrack={id:pass.id,chapter:pass.chapter,curve:new THREE.CatmullRomCurve3(points),startQ,startScale:shark.group.scale.x};
+          passTrack={id:pass.id,chapter:pass.chapter,curve:pass.chapter===0?homeFlybyCurve(start,p.z):new THREE.CatmullRomCurve3(points),startQ,startScale:shark.group.scale.x};
           lastPassChapter=pass.chapter;
-          if(debug&&pass.chapter===2)passTrace={started:time,rows:[]};
+          if(debug&&(pass.chapter===0||pass.chapter===2))passTrace={started:time,rows:[]};
         }
         const t=smoother(0,1,pass.t),curve=passTrack.curve,bank=Math.sin(pass.t*Math.PI*2)*.17;
         shark.group.position.copy(curve.getPoint(t));

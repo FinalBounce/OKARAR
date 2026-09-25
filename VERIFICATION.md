@@ -1,5 +1,15 @@
 # Vérification — Portfolio OKARAR / 25 septembre 2026
 
+## Départ de Home — ne jamais remplacer le survol par une sortie frontale
+
+- Cause : le contrôleur annulait le passage 00 lors d’une inversion de scroll (y compris un retour aimanté) ou d’un saut au-delà de la première destination. Le raccord reprenait alors la direction instantanée du nez, parfois encore dirigée vers la caméra. Un très grand saut pouvait aussi éviter complètement le déclenchement de ce passage.
+- Le survol 00 garde désormais la main jusqu’à son point de sortie exact, indépendamment des changements de scroll. Le dernier choix de section est utilisé ensuite par le raccord existant. Un grand saut depuis Home déclenche le même survol même si la position lissée a déjà dépassé la première section. Le scroll, les textes et leur aspiration ne sont pas bloqués ; aucun masquage ni changement d’opacité du requin. Courbe, durée, battements et autres passages conservés.
+- Courbe 00 extraite sans modification dans un module partagé par le rendu et les tests du vrai modèle. Tests de retournement et changement de destination à cinq moments du passage, huit destinations et trois cadences (30/60/120 Hz), grands sauts, fin livrée à 100 %, rejeu après retour et absence de succession de passages intermédiaires.
+- Contrôle géométrique supplémentaire : intersections des vrais triangles animés avec le plan proche de la caméra, en formats desktop/mobile, amplitude maximale, trois phases de dérive au départ et parallaxe de caméra. Toute coupe reste au-dessus de l’écran avec une marge, et non autour de la caméra.
+- Navigateur 1280 × 720 : descente puis remontée immédiate, passage 00 poursuivi de 0 à 1 puis retour unique à Home ; saut direct vers Contact, même survol complet puis arrivée au chapitre 5. Format 390 × 844 simulé : descente, remontée et saut à Contact dans le même passage, sans remplacement par un raccord frontal. Les réglages de performance mobile ne sont pas modifiés.
+- Seuil de départ original conservé : un très petit geste qui revient avant 14 % ne lance pas de survol. En mobile simulé, trace finale de 270 images : progression du passage 00 de 0 à 1, puis un seul raccord vers Contact, sans mouvement parasite intermédiaire.
+- 171 tests réussis, contrôle de syntaxe et compilation validés.
+
 ## Sections aimantées — parcours clair et sombre
 
 - Ajout du calage natif du navigateur après consentement, commun aux six sections et aux deux ambiances. Le geste, son inertie, les positions intermédiaires, l’aspiration des mots et les trajectoires restent inchangés. Aucun intercepteur de molette/toucher, minuteur ou second moteur de défilement.
